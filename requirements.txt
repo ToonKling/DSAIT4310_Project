@@ -1,3 +1,6 @@
 pandas
 fastparquet
 duckdb
+matplotlib
+scipy
+
