@@ -21,9 +21,10 @@ for i, row in airports.iterrows():
     print(f'We have {len(involving_airport)} data points involving {airport_code}, {len(delays_involving_airport)} are delayed with mean carrier delay: {mean}')
 
     # Finding vulnerability of this airport
-    # Timezones wont be an issue right?
-    involving_airport['DEP_SCH'] = (pd.to_datetime(involving_airport['Scheduled_DEP'], errors="coerce").dt.floor("h"))
-    involving_airport['DEP_ACT'] = pd.to_datetime(involving_airport['Actual_DEP_dt_EST'], errors="coerce").dt.floor("h")
+    # Timezones wont be an issue right? Wrong! (For some reason the dataset does not have the actual departure in local time, we calculate it manually)
+    involving_airport['DEP_SCH'] = pd.to_datetime(involving_airport['Scheduled_DEP'], errors="coerce").dt.floor("h")
+    local_delay_dt = pd.to_timedelta(involving_airport['DEP_DELAY'], unit='m')
+    involving_airport['DEP_ACT'] = (pd.to_datetime(involving_airport['Scheduled_DEP'], errors="coerce") + local_delay_dt).dt.floor("h")
     involving_airport['ARR_SCH'] = pd.to_datetime(involving_airport['Scheduled_ARR_Ori'], errors="coerce").dt.floor("h")
     involving_airport['ARR_ACT'] = pd.to_datetime(involving_airport['Actual_ARR_dt_Ori'], errors="coerce").dt.floor("h")
     involving_airport = involving_airport[["DEP_SCH", "DEP_ACT", "ARR_SCH", "ARR_ACT"]]
@@ -31,11 +32,13 @@ for i, row in airports.iterrows():
 
     events = involving_airport.melt(value_name="timestamp", var_name="event_type")
     events = events[events["timestamp"].dt.hour > 6] # Per paper we don't consider flights between 0 and 6 hours
+    
     counts = events.groupby(["timestamp", "event_type"]).size().reset_index(name="total")
     pivoted = counts.pivot(index="timestamp", columns="event_type", values="total").fillna(0).astype(int)
     pivoted['PLANNED_CAP'] = pivoted['DEP_SCH'] + pivoted['ARR_SCH']
     pivoted['ACTUAL_CAP']  = pivoted['DEP_ACT'] + pivoted['ARR_ACT']
     pivoted['VULN']        = pivoted['ACTUAL_CAP'] > pivoted['PLANNED_CAP'] / 0.9 # Assume alpha = 0.9
+
     vulnerability = pivoted['VULN'].mean()
     airports.loc[i, 'VULN'] = vulnerability
 
@@ -45,7 +48,6 @@ for i, row in airports.iterrows():
 print(f'\n{airports}\n')
 
 plt.figure(figsize=(8, 5))
-
 plt.hist(airports["VULN"], bins=20, density=True, alpha=0.7, color='blue', edgecolor='black')
 
 plt.xlabel("Vulnerability")
