@@ -1,5 +1,4 @@
 import pandas as pd
-import duckdb
 import matplotlib.pyplot as plt
 
 airports = pd.read_csv('airports.csv')
@@ -7,8 +6,7 @@ airports = airports[airports['Country'] == 'United States']
 airports = airports[airports['IATA'].str.len() == 3]
 airlines = pd.read_csv('airlines.csv')
 routes = pd.read_csv('routes.csv')
-nr_rows = 1000000 # Total dataset size is 5559465
-delays = duckdb.query(f'SELECT * FROM "{'./delays.parquet'}" LIMIT {nr_rows};').df()
+delays = pd.read_parquet('delays.parquet', engine='fastparquet')
 
 # Filter out airports for which we have no flight information
 # Given 100000 rows, this leaves us with 60 airports, less than the 349 they have :(
