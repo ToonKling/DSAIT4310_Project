@@ -10,7 +10,8 @@ delays = pd.read_parquet('delays.parquet', engine='fastparquet')
 
 # Filter out airports for which we have no flight information
 # Given 100000 rows, this leaves us with 60 airports, less than the 349 they have :(
-airports = airports[airports['IATA'].isin(delays['ORIGIN'])]
+# Including ORIGIN and DEST airports brings it up to 341 (this means some airports have only arriving flights?)
+airports = airports[airports['IATA'].isin(delays['ORIGIN'])| airports['IATA'].isin(delays['DEST'])]
 
 for i, row in airports.iterrows():
     airport_code = row['IATA']
