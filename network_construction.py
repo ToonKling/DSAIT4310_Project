@@ -26,7 +26,7 @@ class AirportNetworkBuilder:
         return sorted(list(origins | destinations))
 
     def _calculate_flight_time(self, row):
-        try:
+        try: # sometimes conversion fails -- TODO: handle better
             # Convert HHMM format to minutes
             dep_time = int(row['CRS_DEP_TIME'])
             arr_time = int(row['CRS_ARR_TIME'])
@@ -163,11 +163,13 @@ class AirportNetworkBuilder:
 
 
 def test_networks():
-    print("TESTING NETWORK CONSTRUCTION")
-    print("="*50)
+    print("🔗 NETWORK CONSTRUCTION DEMONSTRATION")
+    print("=" * 60)
 
+    # Load data
     flight_data = pd.read_csv('data/OnTimePerformance_July2018.csv', low_memory=False)
 
+    # Filter to paper's timeframe
     date_parts = {
         'year': flight_data['YEAR'],
         'month': flight_data['MONTH'],
@@ -178,12 +180,77 @@ def test_networks():
     end_date = pd.Timestamp('2018-07-14')
     flight_data = flight_data[(flight_data['DATE'] >= start_date) & (flight_data['DATE'] <= end_date)]
 
+    print(f"📊 Dataset: {len(flight_data):,} flights ({start_date.date()} to {end_date.date()})")
+
+    # Build networks
     builder = AirportNetworkBuilder(flight_data)
     G1, G2, G3 = builder.build_all_networks()
 
-    builder.get_top_connected_airports(10)
+    print("\n🏗️  NETWORK SPECIFICATIONS")
+    print("-" * 40)
+    print("G1: Unweighted - wij = 1 (if direct flight exists)")
+    print("G2: Flight frequency - wij = (Fij + Fji) / max_frequency")
+    print("G3: Inverse flight time - wij = (1/E[Tij]) / max_inverse_time")
 
+    print("\n📈 NETWORK STATISTICS")
+    print("-" * 40)
+    for name, G in [('G1', G1), ('G2', G2), ('G3', G3)]:
+        weights = [data['weight'] for u, v, data in G.edges(data=True)]
+        print(f"{name}: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
+        print(f"     Weight range: [{min(weights):.4f}, {max(weights):.4f}]")
+        print()
 
+    print("🔍 EXAMPLE ROUTES & WEIGHTS")
+    print("-" * 40)
+    test_routes = [
+        ('ATL', 'CLT', 'Busy domestic route'),
+        ('LAX', 'SFO', 'High-frequency short route'),
+        ('JFK', 'LAX', 'Transcontinental route'),
+        ('ANC', 'SEA', 'Long-distance route')
+    ]
+
+    for origin, dest, description in test_routes:
+        if G1.has_edge(origin, dest):
+            w1 = G1[origin][dest]['weight']
+            w2 = G2[origin][dest]['weight']
+            w3 = G3[origin][dest]['weight']
+
+            # Get flight stats for this route
+            route_flights = flight_data[
+                ((flight_data['ORIGIN'] == origin) & (flight_data['DEST'] == dest)) |
+                ((flight_data['ORIGIN'] == dest) & (flight_data['DEST'] == origin))
+            ]
+
+            print(f"{origin}-{dest} ({description}):")
+            print(f"  Flights: {len(route_flights):,}")
+            print(f"  G1 weight: {w1:.3f} (always 1.0)")
+            print(f"  G2 weight: {w2:.3f} (flight frequency)")
+            print(f"  G3 weight: {w3:.3f} (inverse flight time)")
+            print()
+
+    print("🏆 TOP 5 AIRPORTS BY NODE STRENGTH")
+    print("-" * 40)
+
+    # Calculate node strengths for each network
+    for name, G in [('G1', G1), ('G2', G2), ('G3', G3)]:
+        strengths = {}
+        for node in G.nodes():
+            strength = sum(data['weight'] for _, _, data in G.edges(node, data=True))
+            strengths[node] = strength
+
+        top_5 = sorted(strengths.items(), key=lambda x: x[1], reverse=True)[:5]
+        print(f"{name} (Node Strength = Σ edge_weights):")
+        for i, (airport, strength) in enumerate(top_5, 1):
+            print(f"  {i}. {airport}: {strength:.2f}")
+        print()
+
+    print("✅ VALIDATION CHECKS")
+    print("-" * 40)
+    print(f"✓ Same topology: {G1.edges() == G2.edges() == G3.edges()}")
+    print(f"✓ Same airports: {set(G1.nodes()) == set(G2.nodes()) == set(G3.nodes())}")
+    print(f"✓ G1 all weights = 1: {all(d['weight'] == 1.0 for u, v, d in G1.edges(data=True))}")
+    print(f"✓ G2 weights normalized: {max(d['weight'] for u, v, d in G2.edges(data=True)) == 1.0}")
+    print(f"✓ G3 weights normalized: {max(d['weight'] for u, v, d in G3.edges(data=True)) == 1.0}")
     return builder, G1, G2, G3
 
 
