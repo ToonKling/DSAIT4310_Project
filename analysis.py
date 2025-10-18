@@ -13,6 +13,16 @@ delays = pd.read_parquet('delays.parquet', engine='fastparquet')
 # Including ORIGIN and DEST airports brings it up to 341 (this means some airports have only arriving flights?)
 airports = airports[airports['IATA'].isin(delays['ORIGIN'])| airports['IATA'].isin(delays['DEST'])]
 
+# Timezones wont be an issue right? Wrong! We use local time for scheduled and actual times.
+delays['DEP_DELAY_td'] = pd.to_timedelta(delays['DEP_DELAY'], unit='m')
+delays['ARR_DELAY_td'] = pd.to_timedelta(delays['ARR_DELAY'], unit='m')
+
+delays['DEP_SCH'] = pd.to_datetime(delays['Scheduled_DEP'], errors="coerce").dt.floor("h")
+delays['ARR_SCH'] = pd.to_datetime(delays['Scheduled_ARR_Ori'], errors="coerce").dt.floor("h")
+delays['DEP_ACT'] = (delays['DEP_SCH'] + delays['DEP_DELAY_td']).dt.floor("h")
+delays['ARR_ACT'] = (delays['ARR_SCH'] + delays['ARR_DELAY_td']).dt.floor("h")
+
+
 for i, row in airports.iterrows():
     airport_code = row['IATA']
     involving_airport = delays[(delays['ORIGIN'] == airport_code) | (delays['DEST'] == airport_code)].copy()
@@ -20,21 +30,32 @@ for i, row in airports.iterrows():
     mean = delays_involving_airport['CARRIER_DELAY'].mean()
     print(f'We have {len(involving_airport)} data points involving {airport_code}, {len(delays_involving_airport)} are delayed with mean carrier delay: {mean}')
 
-    # Finding vulnerability of this airport
-    # Timezones wont be an issue right? Wrong! (For some reason the dataset does not have the actual departure in local time, we calculate it manually)
-    involving_airport['DEP_SCH'] = pd.to_datetime(involving_airport['Scheduled_DEP'], errors="coerce").dt.floor("h")
-    local_delay_dt = pd.to_timedelta(involving_airport['DEP_DELAY'], unit='m')
-    involving_airport['DEP_ACT'] = (pd.to_datetime(involving_airport['Scheduled_DEP'], errors="coerce") + local_delay_dt).dt.floor("h")
-    involving_airport['ARR_SCH'] = pd.to_datetime(involving_airport['Scheduled_ARR_Ori'], errors="coerce").dt.floor("h")
-    involving_airport['ARR_ACT'] = pd.to_datetime(involving_airport['Actual_ARR_dt_Ori'], errors="coerce").dt.floor("h")
-    involving_airport = involving_airport[["DEP_SCH", "DEP_ACT", "ARR_SCH", "ARR_ACT"]]
-    involving_airport = involving_airport.dropna()
+    if len(delays_involving_airport) == 0:
+        airports.loc[i, 'VULN'] = 0.0 # Skip airports with no delayed flights
+        continue
 
-    events = involving_airport.melt(value_name="timestamp", var_name="event_type")
-    events = events[events["timestamp"].dt.hour > 6] # Per paper we don't consider flights between 0 and 6 hours
+    # Finding vulnerability of this airport
+    
+    # Filter flights by origin and destination separately 
+    # We avoid double counting delays e.g. a delayed departure only counts as a delay for the ORIGIN airport, not DEST, unless arrival is delayed as well
+    departures = delays[delays['ORIGIN'] == airport_code].copy()
+    arrivals = delays[delays['DEST'] == airport_code].copy()
+
+    dep_events = departures[["DEP_SCH", "DEP_ACT"]].dropna()
+    dep_events_melted = dep_events.melt(value_name="timestamp", var_name="event_type")
+    arr_events = arrivals[["ARR_SCH", "ARR_ACT"]].dropna()
+    arr_events_melted = arr_events.melt(value_name="timestamp", var_name="event_type")
+    
+    events = pd.concat([dep_events_melted, arr_events_melted], ignore_index=True)
+
+    events = events[events["timestamp"].dt.hour >= 6] # Per paper we don't consider flights between 0 and 6 hours
     
     counts = events.groupby(["timestamp", "event_type"]).size().reset_index(name="total")
     pivoted = counts.pivot(index="timestamp", columns="event_type", values="total").fillna(0).astype(int)
+
+    all_possible_events = ['DEP_SCH', 'ARR_SCH', 'DEP_ACT', 'ARR_ACT']
+    pivoted = pivoted.reindex(columns=all_possible_events, fill_value=0) # Deals with empty columns
+
     pivoted['PLANNED_CAP'] = pivoted['DEP_SCH'] + pivoted['ARR_SCH']
     pivoted['ACTUAL_CAP']  = pivoted['DEP_ACT'] + pivoted['ARR_ACT']
     pivoted['VULN']        = pivoted['ACTUAL_CAP'] > pivoted['PLANNED_CAP'] / 0.9 # Assume alpha = 0.9
