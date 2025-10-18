@@ -22,6 +22,15 @@ delays['ARR_SCH'] = pd.to_datetime(delays['Scheduled_ARR_Ori'], errors="coerce")
 delays['DEP_ACT'] = (delays['DEP_SCH'] + delays['DEP_DELAY_td']).dt.floor("h")
 delays['ARR_ACT'] = (delays['ARR_SCH'] + delays['ARR_DELAY_td']).dt.floor("h")
 
+# Analysis period
+start_date = delays['DEP_SCH'].min()# pd.Timestamp('2023-07-01') # delays['Scheduled_DEP'].min()
+end_date = delays['ARR_SCH'].max()#pd.Timestamp('2023-07-14')  # inclusive
+delays = delays[(delays['DEP_SCH'] >= start_date) & (delays['DEP_SCH'] <= end_date)]
+delays = delays[(delays['ARR_SCH'] >= start_date) & (delays['ARR_SCH'] <= end_date)]
+num_days = (end_date - start_date).days + 1 
+hours_per_day = 18  # Hours 6:00-23:59 (excluding 0:00-05:59)
+total_operation_hours = hours_per_day * num_days
+
 
 for i, row in airports.iterrows():
     airport_code = row['IATA']
@@ -60,7 +69,8 @@ for i, row in airports.iterrows():
     pivoted['ACTUAL_CAP']  = pivoted['DEP_ACT'] + pivoted['ARR_ACT']
     pivoted['VULN']        = pivoted['ACTUAL_CAP'] > pivoted['PLANNED_CAP'] / 0.9 # Assume alpha = 0.9
 
-    vulnerability = pivoted['VULN'].mean()
+    vulnerability = pivoted['VULN'].sum()
+    vulnerability = vulnerability / total_operation_hours # Divide by total hours instead of mean() since some hours may not have any flights
     airports.loc[i, 'VULN'] = vulnerability
 
     print(f'pivoted for {airport_code} is \n{pivoted}\n')
