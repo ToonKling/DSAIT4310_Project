@@ -11,18 +11,19 @@ def hhmm_to_timedelta(hhmm):
     # Extract hours and minutes
     hours = hhmm // 100
     minutes = hhmm % 100
+    assert minutes < 60
     return pd.Timedelta(hours=hours, minutes=minutes)
 
-airports = pd.read_csv('airports.csv')
-airports = airports[airports['Country'] == 'United States']
-airports = airports[airports['IATA'].str.len() == 3]
+# airports = pd.read_csv('airports.csv')
+# airports = airports[airports['Country'] == 'United States']
+# airports = airports[airports['IATA'].str.len() == 3]
 airlines = pd.read_csv('airlines.csv')
 routes = pd.read_csv('routes.csv')
 delays = pd.read_csv('OnTimePerformance_July2018.csv')#pd.read_parquet('delays.parquet', engine='fastparquet')
 
 # Filter out airports for which we have no flight information
 # Given 100000 rows, this leaves us with 60 airports, less than the 349 they have :(
-# Including ORIGIN and DEST airports brings it up to 341 (this means some airports have only arriving flights?)
+# Including ORIGIN and DEST airports brings it up to 349 (this means some airports have only arriving flights?)
 airports = pd.DataFrame(np.unique(np.concatenate([delays['ORIGIN'].unique(), delays['DEST'].unique()])), columns=['IATA'])
 
 date_parts = {
@@ -38,24 +39,18 @@ delays = delays[(delays['DATE'] >= start_date) & (delays['DATE'] <= end_date)]
 
 delays['DEP_SCH_TD'] = delays['CRS_DEP_TIME'].apply(hhmm_to_timedelta)
 delays['ARR_SCH_TD'] = delays['CRS_ARR_TIME'].apply(hhmm_to_timedelta)
-# Handle flights that cross midnight (arrival time < departure time)
-# delays['ARR_DATE_OFFSET'] = (delays['ARR_SCH_TD'] < delays['DEP_SCH_TD']).astype(int)
 
 # Calculate scheduled times
 delays['DEP_SCH'] = (delays['DATE'] + delays['DEP_SCH_TD']).dt.floor("h")
 delays['ARR_SCH'] = (delays['DATE'] + delays['ARR_SCH_TD']).dt.floor("h")
-# delays['ARR_SCH'] = (delays['DATE'] + pd.to_timedelta(delays['ARR_DATE_OFFSET'], unit='D') + delays['ARR_SCH_TD']).dt.floor("h")
+
 # Calculate actual times (scheduled + delay)
-delays['DEP_ACT'] = (delays['DEP_SCH'] + pd.to_timedelta(delays['DEP_DELAY'], unit='m')).dt.floor("h")
-delays['ARR_ACT'] = (delays['ARR_SCH'] + pd.to_timedelta(delays['ARR_DELAY'], unit='m')).dt.floor("h")
+delays['DEP_ACT'] = delays['DATE'] + delays['DEP_TIME'].apply(hhmm_to_timedelta).dt.floor("h")
+delays['ARR_ACT'] = delays['DATE'] + delays['ARR_TIME'].apply(hhmm_to_timedelta).dt.floor("h")
 
 print(airports)
 for i, row in airports.iterrows():
     airport_code = row['IATA']
-    involving_airport = delays[(delays['ORIGIN'] == airport_code) | (delays['DEST'] == airport_code)].copy()
-    delays_involving_airport = involving_airport[involving_airport['CARRIER_DELAY'] > 0]
-    mean = delays_involving_airport['CARRIER_DELAY'].mean()
-    print(f'We have {len(involving_airport)} data points involving {airport_code}, {len(delays_involving_airport)} are delayed with mean carrier delay: {mean}')
 
     # Filter flights by origin and destination separately
     departures = delays[delays['ORIGIN'] == airport_code].copy()
@@ -93,14 +88,16 @@ for i, row in airports.iterrows():
     vulnerability = hours_congested / total_operation_hours
     airports.loc[i, 'VULN'] = vulnerability
 
-    print(f'pivoted for {airport_code} is \n{pivoted}\n')
+    # print(f'pivoted for {airport_code} is \n{pivoted}\n')
     print(f'Vulnerability for {airport_code} is {vulnerability:.2f}\n')
 
 print(f'\n{airports}\n')
 
 plt.figure(figsize=(8, 5))
-plt.hist(airports["VULN"], bins=20, density=True, alpha=0.7, color='blue', edgecolor='black')
 
+binwidth = 1 / 45
+bins= np.arange(0, 1 , binwidth)
+plt.hist(airports["VULN"], bins=bins, density=True, alpha=0.7, color='blue', edgecolor='black')
 plt.xlabel("Vulnerability")
 plt.xlim(0, 1)
 plt.ylabel("Probability Density")
