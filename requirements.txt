@@ -2,4 +2,3 @@ pandas
 fastparquet
 matplotlib
 scipy
-
