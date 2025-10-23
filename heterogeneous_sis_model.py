@@ -1,6 +1,7 @@
 import numpy as np
-from typing import Dict, List, Tuple, Any
+import pandas as pd
 import networkx as nx
+from typing import Dict, List, Tuple, Any
 
 class HeterogeneousSISModel:
     """
@@ -55,7 +56,7 @@ class HeterogeneousSISModel:
 
     def _calculate_epidemic_threshold(self) -> float:
         """
-        Calculate epidemic threshold \lambda_1 (A*) from paper equation (3).
+        Calculate epidemic threshold \\lambda_1 (A*) from paper equation (3).
         
         Returns:
             TODO: Largest eigenvalue of A* matrix
