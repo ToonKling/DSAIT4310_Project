@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import networkx as nx
+import scipy
 from scipy import optimize
 from scipy.sparse import linalg
 from typing import Dict, List, Tuple, Any
@@ -116,9 +117,10 @@ class HeterogeneousSISModel:
             return self._solve_nimfa_steady_state(airports, self.G)
 
     def _jensen_shannon_divergence(self, actual: List[float], 
-                                predicted: List[float]) -> float:
+                                predicted: List[float], base = None) -> float:
         """
         Calculate Jensen-Shannon divergence between distributions.
+        Calculation from paper
         
         Args:
             actual: List of actual vulnerability values
@@ -129,7 +131,18 @@ class HeterogeneousSISModel:
             
         
         """
-        return 0.15  # Placeholder 
+        p = np.asarray(actual)
+        q = np.asarray(predicted)
+        p = p / np.sum(p, axis=0)
+        q = q / np.sum(q, axis=0)
+        m = (p + q) / 2.0
+        left = scipy.stats.entropy(p, m)
+        right = scipy.stats.entropy(q, m)
+        js = np.sum(left, axis=0) + np.sum(right, axis=0)
+        if base is not None:
+            js /= np.log(base)
+        return np.sqrt(js / 2.0)
+
 
     def _calculate_recognition_quality(self, actual: List[float], 
                                     predicted: List[float]) -> float:
