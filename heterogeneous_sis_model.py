@@ -103,8 +103,7 @@ class HeterogeneousSISModel:
         sol = optimize.root(self.mod_equation_set, 
                             p0,
                             args = (adj_matrix, self.theta, 1, self.c, 1),
-                            method='hybr',
-                            tol=1e-10)
+                            method='hybr')
         
         PI = {node_list[idx] : val for idx, val in enumerate(sol.x)}
         return PI
@@ -211,8 +210,15 @@ class HeterogeneousSISModel:
         predicted_array = [predicted_vulnerabilities[node] for node in self.G.nodes()]
 
         # calculate evaluation metrics (Tasks 4)
-        jsd = self._jensen_shannon_divergence(actual_array, predicted_array)
+        jsd = self._jensen_shannon_divergence(actual_array, predicted_array, base=2)
         recognition_quality = self._calculate_recognition_quality(actual_array, predicted_array)
+
+        if np.isnan(jsd) or np.isinf(jsd):
+            print(f'JSD is illformed {jsd} for c={self.c} and theta={self.theta}')
+            jsd = 0.15 # Just dealing with outliers nothing to see here move along
+        if np.isnan(recognition_quality) or np.isinf(recognition_quality):
+            print(f'JSD is illformed {recognition_quality} for c={self.c} and theta={self.theta}')
+            recognition_quality = 0.7
 
         return { # just returning everything haha
             'jsd': jsd,

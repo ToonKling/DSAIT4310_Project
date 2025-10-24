@@ -8,30 +8,32 @@ from network_construction import AirportNetworkBuilder
 from heterogeneous_sis_model import HeterogeneousSISModel
 from analysis_paper_dataset import get_airports_with_vulnerability
 
-def plot_scatter_coupled_JS_ROC_AUC(shannon, ranking_quality, ax, colormap = 'viridis',show_c = False, show_theta = True):
+def plot_scatter_coupled_JS_ROC_AUC(shannon, ranking_quality, label, ax, colormap = 'viridis',show_c = False, show_theta = True):
     # We scatter first the Shannon, then the ranking quality
-    ax.scatter(shannon, ranking_quality, edgecolors='k',linewidths=0.2,cmap = colormap,label = '_nolegend_')
+    sc = ax.scatter(shannon, ranking_quality, c=label, edgecolors='k',linewidths=0.2,cmap = colormap,label = '_nolegend_')
+    ax.set_xlim(0, 0.35)
+    ax.set_ylim(0.68, 0.78)
 
-    # cbar = plt.colorbar()
-    # if show_c: cbar.set_label('c', size = 20)
-    # if show_theta: cbar.set_label(r'$\theta$', size = 20)
+    cbar = plt.colorbar(sc, ax=ax)
+    if show_c: cbar.set_label('c', size = 20)
+    if show_theta: cbar.set_label(r'$\theta$', size = 20)
     # tau = df[alpha]['Probabilities']['Network%d_1to14_%1.6f_%1.6f' %(n_network,0,0)].columns[1]
     # plt.axvline(jens_shann(df,alpha,n_network,tau,0,0),label = 'homogeneous_SIS',color = 'k',linestyle = ':')
     # plt.hlines(get_auc_inf(df_RR,alpha,n_network,tau,0,0),xmin=0,xmax=0.35,color = 'k',linestyle = ':')
-    plt.ylabel(r'$\xi$',size = 20)
-    plt.xlabel(r'JSD',size = 20)
+    # ax.ylabel(r'$\xi$',size = 20)
+    # ax.xlabel(r'JSD',size = 20)
     # red_circle = [Line2D([0], [0], marker='o', color='w', label='heterogeneous SIS',
     #                     markeredgecolor ='k',),Line2D([0], [0],color='k', linestyle = ':',label=' homogeneous SIS')]
 
     # plt.legend(handles=red_circle,loc='lower right')
 
-def draw_graphs(jdts, ranking_qualities):
+def draw_graphs(jdts, ranking_qualities, picked_cs, picked_thetas):
     title_dic = {1:'a',2:'b',3:'c'}
     fig, axs = plt.subplots(3,2,figsize = (18,20))
     plt.subplots_adjust(hspace = 0.4)
     for n_network, name in enumerate(['G1', 'G2', 'G3']):
-        plot_scatter_coupled_JS_ROC_AUC(jdts[name], ranking_qualities[name], axs[n_network, 0])
-        plot_scatter_coupled_JS_ROC_AUC(jdts[name], ranking_qualities[name], axs[n_network, 1])
+        plot_scatter_coupled_JS_ROC_AUC(jdts[name], ranking_qualities[name], picked_cs[name], axs[n_network, 0], show_c = True, show_theta=False)
+        plot_scatter_coupled_JS_ROC_AUC(jdts[name], ranking_qualities[name], picked_thetas[name], axs[n_network, 1])
 
         axs[n_network,0].text(0.03, 0.9, s= '('+title_dic[n_network+1]+'1)', fontsize=20,transform=axs[n_network,0].transAxes)
         axs[n_network,1].text(0.03, 0.9, s= '('+title_dic[n_network+1]+'2)', fontsize=20,transform=axs[n_network,1].transAxes)
@@ -57,6 +59,8 @@ cs_thetas = itertools.product(cs, thetas)
 
 jsds = {'G1': [], 'G2' : [], 'G3': []}
 recognition_qualities = {'G1': [], 'G2' : [], 'G3': []}
+picked_cs = {'G1': [], 'G2' : [], 'G3': []}
+picked_thetas = {'G1': [], 'G2' : [], 'G3': []}
 for c, theta in cs_thetas:
     for name, network in [('G1', G1), ('G2', G2), ('G3', G3)]:
         start = time.time()
@@ -66,11 +70,13 @@ for c, theta in cs_thetas:
         jsd, recognition_quality = eval['jsd'], eval['recognition_quality']
         jsds[name].append(jsd)
         recognition_qualities[name].append(recognition_quality)
+        picked_cs[name].append(c)
+        picked_thetas[name].append(theta)
         print(f'Took {time.time() - start:.3f} seconds')
 
-print(f'JSDS: \n{jsds}\n')
-print(f'Recognition qualities: \n{recognition_qualities}\n')
+print(f'JSDS: \n{jsds['G2']}\n')
+print(f'Recognition qualities: \n{recognition_qualities['G2']}\n')
 
-draw_graphs(jsds, recognition_qualities)
+draw_graphs(jsds, recognition_qualities, picked_cs, picked_thetas)
 
 
