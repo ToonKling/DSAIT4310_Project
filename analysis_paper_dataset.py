@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import os
+import pickle
 
 start_date = pd.Timestamp('2018-07-01')
 end_date = pd.Timestamp('2018-07-14')
@@ -18,6 +20,13 @@ def hhmm_to_timedelta(hhmm):
     return pd.Timedelta(hours=hours, minutes=minutes)
 
 def get_airports_with_vulnerability():
+    # Just some caching since this calculation is expensive
+    # Delete this file to rerun calculation
+    CACHE_FILE = "./airports_vuln.cache"
+    if os.path.exists(CACHE_FILE):
+        with open(CACHE_FILE, "rb") as f:
+            return pickle.load(f)
+
     delays = pd.read_csv('data/OnTimePerformance_July2018.csv')
 
     # Filter out airports for which we have no flight information
@@ -82,6 +91,8 @@ def get_airports_with_vulnerability():
         vulnerability = hours_congested / total_operation_hours
         airports.loc[i, 'VULN'] = vulnerability
 
+    with open(CACHE_FILE, "wb") as f:
+        pickle.dump(airports, f)
     return airports
 
 if __name__ == "__main__":

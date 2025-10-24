@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
+import os
+import pickle
 from collections import defaultdict
 from scipy.stats import pearsonr
 import warnings
@@ -129,9 +131,15 @@ class AirportNetworkBuilder:
         return G3
 
     def build_all_networks(self):
+        CACHE_FILE = "./all_networks.cache"
+        if os.path.exists(CACHE_FILE):
+            with open(CACHE_FILE, "rb") as f:
+                return pickle.load(f)
         self.build_g1_unweighted()
         self.build_g2_frequency_weighted()
         self.build_g3_flight_time_weighted()
+        with open(CACHE_FILE, "wb") as f:
+            pickle.dump((self.G1, self.G2, self.G3), f)
         return self.G1, self.G2, self.G3
 
 

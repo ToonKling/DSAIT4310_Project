@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
 import networkx as nx
+import scipy
+import matplotlib.pyplot as plt
+import itertools
 from scipy import optimize
 from scipy.sparse import linalg
 from typing import Dict, List, Tuple, Any
@@ -116,9 +119,10 @@ class HeterogeneousSISModel:
             return self._solve_nimfa_steady_state(airports, self.G)
 
     def _jensen_shannon_divergence(self, actual: List[float], 
-                                predicted: List[float]) -> float:
+                                predicted: List[float], base = None) -> float:
         """
         Calculate Jensen-Shannon divergence between distributions.
+        Calculation from paper
         
         Args:
             actual: List of actual vulnerability values
@@ -129,7 +133,18 @@ class HeterogeneousSISModel:
             
         
         """
-        return 0.15  # Placeholder 
+        p = np.asarray(actual)
+        q = np.asarray(predicted)
+        p = p / np.sum(p, axis=0)
+        q = q / np.sum(q, axis=0)
+        m = (p + q) / 2.0
+        left = scipy.stats.entropy(p, m)
+        right = scipy.stats.entropy(q, m)
+        js = np.sum(left, axis=0) + np.sum(right, axis=0)
+        if base is not None:
+            js /= np.log(base)
+        return np.sqrt(js / 2.0)
+
 
     def _calculate_recognition_quality(self, actual: List[float], 
                                     predicted: List[float]) -> float:
@@ -163,6 +178,8 @@ class HeterogeneousSISModel:
         jsd = self._jensen_shannon_divergence(actual_array, predicted_array)
         recognition_quality = self._calculate_recognition_quality(actual_array, predicted_array)
 
+        self.draw_graphs()
+
         return { # just returning everything haha
             'jsd': jsd,
             'recognition_quality': recognition_quality,
@@ -177,3 +194,32 @@ class HeterogeneousSISModel:
                 'delta_base': self.delta_base
             }
         }
+    
+    def plot_scatter_coupled_JS_ROC_AUC(self, ax, colormap = 'viridis',show_c = False, show_theta = True):
+        ax.scatter([1, 2, 3], [1, 2, 3], edgecolors='k',linewidths=0.2,cmap = colormap,label = '_nolegend_')
+        # cbar = plt.colorbar()
+        # if show_c: cbar.set_label('c', size = 20)
+        # if show_theta: cbar.set_label(r'$\theta$', size = 20)
+        # tau = df[alpha]['Probabilities']['Network%d_1to14_%1.6f_%1.6f' %(n_network,0,0)].columns[1]
+        # plt.axvline(jens_shann(df,alpha,n_network,tau,0,0),label = 'homogeneous_SIS',color = 'k',linestyle = ':')
+        # plt.hlines(get_auc_inf(df_RR,alpha,n_network,tau,0,0),xmin=0,xmax=0.35,color = 'k',linestyle = ':')
+        plt.ylabel(r'$\xi$',size = 20)
+        plt.xlabel(r'JSD',size = 20)
+        # red_circle = [Line2D([0], [0], marker='o', color='w', label='heterogeneous SIS',
+        #                     markeredgecolor ='k',),Line2D([0], [0],color='k', linestyle = ':',label=' homogeneous SIS')]
+
+        # plt.legend(handles=red_circle,loc='lower right')
+
+    def draw_graphs(self):
+        title_dic = {1:'a',2:'b',3:'c'}
+        fig, axs = plt.subplots(3,2,figsize = (18,20))
+        plt.subplots_adjust(hspace = 0.4)
+        for n_network in range(1,4):
+            
+            self.plot_scatter_coupled_JS_ROC_AUC(axs[n_network-1, 0])
+            self.plot_scatter_coupled_JS_ROC_AUC(axs[n_network-1, 0])
+
+            axs[n_network-1,0].text(0.03, 0.9, s= '('+title_dic[n_network]+'1)', fontsize=20,transform=axs[n_network-1,0].transAxes)
+            axs[n_network-1,1].text(0.03, 0.9, s= '('+title_dic[n_network]+'2)', fontsize=20,transform=axs[n_network-1,1].transAxes)
+        plt.show()
+
