@@ -32,17 +32,14 @@ def prepare_data(flight_data):
 
     flight_data['DEP_SCH_TD'] = flight_data['CRS_DEP_TIME'].apply(hhmm_to_timedelta)
     flight_data['ARR_SCH_TD'] = flight_data['CRS_ARR_TIME'].apply(hhmm_to_timedelta)
-    # Handle flights that cross midnight (arrival time < departure time)
-    # flight_data['ARR_DATE_OFFSET'] = (flight_data['ARR_SCH_TD'] < flight_data['DEP_SCH_TD']).astype(int)
 
     # Calculate scheduled times
-    flight_data['DEP_SCH'] = (flight_data['DATE'] + flight_data['DEP_SCH_TD'])
-    flight_data['ARR_SCH'] = (flight_data['DATE'] + flight_data['ARR_SCH_TD'])
-    # flight_data['ARR_SCH'] = (flight_data['DATE'] + pd.to_timedelta(flight_data['ARR_DATE_OFFSET'], unit='D') + flight_data['ARR_SCH_TD']).dt.floor("h")
+    flight_data['DEP_SCH'] = (flight_data['DATE'] + flight_data['DEP_SCH_TD']).dt.floor("h")
+    flight_data['ARR_SCH'] = (flight_data['DATE'] + flight_data['ARR_SCH_TD']).dt.floor("h")
+
     # Calculate actual times (scheduled + delay)
-    flight_data['DEP_DEL'] = pd.to_timedelta(flight_data['DEP_DELAY'], unit='m')
-    flight_data['DEP_ACT'] = (flight_data['DEP_SCH'] + pd.to_timedelta(flight_data['DEP_DELAY'], unit='m'))
-    flight_data['ARR_ACT'] = (flight_data['ARR_SCH'] + pd.to_timedelta(flight_data['ARR_DELAY'], unit='m'))
+    flight_data['DEP_ACT'] = flight_data['DATE'] + flight_data['DEP_TIME'].apply(hhmm_to_timedelta).dt.floor("h")
+    flight_data['ARR_ACT'] = flight_data['DATE'] + flight_data['ARR_TIME'].apply(hhmm_to_timedelta).dt.floor("h")
 
     return flight_data
 
@@ -146,9 +143,3 @@ if __name__ == "__main__":
     
     # plot the link distribution and strength distributions of G2 and G3 (reproduce fig2)
     distributions_plot(G2, G3, weight_attr='weight', bins=20)
-
-
-        
-
-
-
