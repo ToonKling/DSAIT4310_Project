@@ -146,16 +146,50 @@ class HeterogeneousSISModel:
         return np.sqrt(js / 2.0)
 
 
-    def _calculate_recognition_quality(self, actual: List[float], 
-                                    predicted: List[float]) -> float:
+    def _calculate_recognition_quality(self, actual: List[float], predicted: List[float]) -> float:
         """
-        TODO: Calculate recognition quality ξ from paper equations (5-6).
+        Computes recognition quality ξ using r(f) sampled at f ∈ {0.00, 0.05, ..., 1.00}.
+        At each f, we compute the recognition rate based on the top f fraction of nodes,
+        then numerically integrate r(f) over [0,1] using the trapezoid rule.
         
         Args:
             actual: List of actual vulnerability values
             predicted: List of predicted vulnerability values
+            
+        Returns:
+            float: The recognition quality ξ.
         """
-        return 0.75  # Placeholder 
+        a = np.asarray(actual, dtype=float)
+        p = np.asarray(predicted, dtype=float)
+        N = len(a)
+        if N == 0:
+            return 0.0
+
+        # Stable rankings (descending)
+        a_ranked = np.argsort(-a, kind="mergesort")  # actual ranking
+        p_ranked = np.argsort(-p, kind="mergesort")  # predicted ranking
+
+        # Fractions f = 0.00, 0.05, ..., 1.00
+        f_values = np.arange(0.0, 1.05, 0.05)
+        r_values = np.zeros_like(f_values)
+
+        for i, f in enumerate(f_values):
+            n_top = int(round(f * N))
+            if n_top == 0:
+                # Edge case: f = 0 means no nodes selected.
+                # We define recognition = 1 when both lists are empty (perfect match),
+                # and 0 otherwise (no overlap).
+                r_values[i] = 1.0 if np.allclose(p, a) else 0.0
+            else:
+                top_actual = set(a_ranked[:n_top])
+                top_pred = set(p_ranked[:n_top])
+                overlap = len(top_actual & top_pred)
+                r_values[i] = overlap / float(n_top)
+
+        # Numerical integration over sampled f using trapezoid rule
+        xi = np.trapezoid(r_values, f_values)
+        return float(xi)
+
 
     def evaluate_performance(self, actual_vulnerabilities: Dict[str, float]) -> Dict[str, Any]:
         """
