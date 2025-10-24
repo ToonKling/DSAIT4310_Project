@@ -117,14 +117,7 @@ class HeterogeneousSISModel:
         Returns:
             Dict mapping airport codes to predicted vulnerability values
         """
-        # Check if above epidemic threshold
-        if self.epidemic_threshold <= self.c:
-            # Below epidemic threshold - no persistent infection
-            print(f'Below epidemic threshold')
-            return {node: 0.0 for node in self.G.nodes()}
-        else:
-            # Above threshold - find meta-stable state using NIMFA
-            return self._solve_nimfa_steady_state(self.G)
+        return self._solve_nimfa_steady_state(self.G)
 
     def _jensen_shannon_divergence(self, actual: List[float], 
                                 predicted: List[float], base = None) -> float:

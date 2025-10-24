@@ -25,17 +25,16 @@ def plot_scatter_coupled_JS_ROC_AUC(shannon, ranking_quality, ax, colormap = 'vi
 
     # plt.legend(handles=red_circle,loc='lower right')
 
-def draw_graphs(G1_Shannon, G2_Shannon, G3_Shannon, ranking_qualities):
+def draw_graphs(jdts, ranking_qualities):
     title_dic = {1:'a',2:'b',3:'c'}
     fig, axs = plt.subplots(3,2,figsize = (18,20))
     plt.subplots_adjust(hspace = 0.4)
-    for n_network in range(1,4):
-        
-        plot_scatter_coupled_JS_ROC_AUC(G1_Shannon, ranking_qualities, axs[n_network-1, 0])
-        plot_scatter_coupled_JS_ROC_AUC(G1_Shannon, ranking_qualities, axs[n_network-1, 0])
+    for n_network, name in enumerate(['G1', 'G2', 'G3']):
+        plot_scatter_coupled_JS_ROC_AUC(jdts[name], ranking_qualities[name], axs[n_network, 0])
+        plot_scatter_coupled_JS_ROC_AUC(jdts[name], ranking_qualities[name], axs[n_network, 1])
 
-        axs[n_network-1,0].text(0.03, 0.9, s= '('+title_dic[n_network]+'1)', fontsize=20,transform=axs[n_network-1,0].transAxes)
-        axs[n_network-1,1].text(0.03, 0.9, s= '('+title_dic[n_network]+'2)', fontsize=20,transform=axs[n_network-1,1].transAxes)
+        axs[n_network,0].text(0.03, 0.9, s= '('+title_dic[n_network+1]+'1)', fontsize=20,transform=axs[n_network,0].transAxes)
+        axs[n_network,1].text(0.03, 0.9, s= '('+title_dic[n_network+1]+'2)', fontsize=20,transform=axs[n_network,1].transAxes)
     plt.show()
 
 flight_data = pd.read_csv('data/OnTimePerformance_July2018.csv')
@@ -48,29 +47,30 @@ G1, G2, G3 = builder.build_all_networks()
 
 
 # `c` is a control parameter from the paper, see page 11
-cs = np.arange(0, 2.02, 0.02)
+cs = np.arange(0.1, 2.02, 0.1) # TODO change back to 0.02
 
 # `theta` is the other control parameter from paper on page 11. In their code it is called `delta` for some reason.
-thetas = np.arange(0, 2.1, 0.1)
+thetas = np.arange(0.1, 2.1, 0.1)
 
 # This is all combinations of our control variables, aka all dots in figure 5.
 cs_thetas = itertools.product(cs, thetas)
 
-jsds = []
-recognition_qualities = []
+jsds = {'G1': [], 'G2' : [], 'G3': []}
+recognition_qualities = {'G1': [], 'G2' : [], 'G3': []}
 for c, theta in cs_thetas:
-    start = time.time()
-    print(f'Evaluating model for c={c} and theta={theta}')
-    model = HeterogeneousSISModel(G1, c=c, theta=theta)
-    eval = model.evaluate_performance(airports)
-    jsd, recognition_quality = eval['jsd'], eval['recognition_quality']
-    jsds.append(jsd)
-    recognition_qualities.append(recognition_quality)
-    print(f'Took {time.time() - start:.3f} seconds')
+    for name, network in [('G1', G1), ('G2', G2), ('G3', G3)]:
+        start = time.time()
+        print(f'Evaluating model for c={c} and theta={theta} on network {name}')
+        model = HeterogeneousSISModel(network, c=c, theta=theta)
+        eval = model.evaluate_performance(airports)
+        jsd, recognition_quality = eval['jsd'], eval['recognition_quality']
+        jsds[name].append(jsd)
+        recognition_qualities[name].append(recognition_quality)
+        print(f'Took {time.time() - start:.3f} seconds')
 
 print(f'JSDS: \n{jsds}\n')
 print(f'Recognition qualities: \n{recognition_qualities}\n')
 
-draw_graphs(jsds, jsds, jsds, recognition_qualities)
+draw_graphs(jsds, recognition_qualities)
 
 
