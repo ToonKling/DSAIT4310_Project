@@ -1,3 +1,5 @@
 __pycache__/
 .DS_Store
 data/
+airports_vuln.cache
+all_networks.cache

@@ -5,7 +5,7 @@ import scipy
 import random
 from scipy import optimize
 from scipy.sparse import linalg
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, Sequence
 
 class HeterogeneousSISModel:
     """
@@ -55,9 +55,15 @@ class HeterogeneousSISModel:
         Returns:
             TODO: Dict mapping airport codes to recovery rates
         """
+        strengths = {n: self.G.degree(n, weight="weight") for n in self.G.nodes()}
+        s_max = max(strengths.values()) if strengths else 0.0
+        if s_max == 0:
+            # No edges / zero weights: all recoveries collapse to δ * c
+            return {n: float(self.delta_base * self.c) for n in self.G.nodes()}
 
-        s_max = max(d['weight'] for _, _, d in self.G.edges(data=True))
-        recovery_rates = {}
+        recovery_rates: Dict[str, float] = {}
+        for n, s_i in strengths.items():
+            recovery_rates[n] = float(self.delta_base * (self.c + (s_i / s_max) ** self.theta))
         return recovery_rates
 
     def _calculate_epidemic_threshold(self) -> float:
@@ -67,7 +73,26 @@ class HeterogeneousSISModel:
         Returns:
             TODO: Largest eigenvalue of A* matrix
         """
-        return 0.5  # Placeholder 
+        # Fixed node order for matrix construction
+        nodes = list(self.G.nodes())
+        if not nodes:
+            return float("-inf")
+
+        # Weighted adjacency matrix W
+        W = nx.to_numpy_array(self.G, nodelist=nodes, weight="weight", dtype=float)
+
+        # diag(δᵢ)
+        delta_i = self._calculate_recovery_rates()
+        # print(delta_i)
+        D = np.diag([delta_i[n] for n in nodes])
+
+        # A* = W - diag(δᵢ)
+        A_star = W - D
+
+        # Largest eigenvalue (matrix is symmetric for undirected graphs)
+        # Use eigvalsh for numerical stability on Hermitian matrices.
+        lambda_max = float(np.linalg.eigvalsh(A_star).max())
+        return lambda_max
 
     # Just copied from the paper
     def mod_equation_set(self, P, *args):
