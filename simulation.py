@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import itertools
 import matplotlib.pyplot as plt
+import time
 from network_analysis import prepare_data
 from network_construction import AirportNetworkBuilder
 from heterogeneous_sis_model import HeterogeneousSISModel
@@ -58,12 +59,17 @@ cs_thetas = itertools.product(cs, thetas)
 jsds = []
 recognition_qualities = []
 for c, theta in cs_thetas:
+    start = time.time()
     print(f'Evaluating model for c={c} and theta={theta}')
     model = HeterogeneousSISModel(G1, c=c, theta=theta)
     eval = model.evaluate_performance(airports)
     jsd, recognition_quality = eval['jsd'], eval['recognition_quality']
     jsds.append(jsd)
     recognition_qualities.append(recognition_quality)
+    print(f'Took {time.time() - start:.3f} seconds')
+
+print(f'JSDS: \n{jsds}\n')
+print(f'Recognition qualities: \n{recognition_qualities}\n')
 
 draw_graphs(jsds, jsds, jsds, recognition_qualities)
 

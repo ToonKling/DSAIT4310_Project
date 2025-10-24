@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 import scipy
+import random
 from scipy import optimize
 from scipy.sparse import linalg
 from typing import Dict, List, Tuple, Any
@@ -54,6 +55,8 @@ class HeterogeneousSISModel:
         Returns:
             TODO: Dict mapping airport codes to recovery rates
         """
+
+        s_max = max(d['weight'] for _, _, d in self.G.edges(data=True))
         recovery_rates = {}
         return recovery_rates
 
@@ -66,36 +69,45 @@ class HeterogeneousSISModel:
         """
         return 0.5  # Placeholder 
 
-    def _solve_nimfa_steady_state(self, airports : list[str], network, v0 = None) -> dict[str, float]:
+    # Just copied from the paper
+    def mod_equation_set(self, P, *args):
+        g_ij = args[0]
+        tau = args[1]
+        gamma = args[2] 
+        c = float(args[3])
+        alpha = args[4] 
+        
+        # Constants
+        g_sum = np.sum(g_ij, axis=1)
+        max_g_sum = np.max(g_sum)
+        normalized = (g_sum / max_g_sum) ** alpha
+
+        # Compute infection term: tau * (1 - P) * (g_ij @ P)
+        infection_term = tau * (1 - P) * (g_ij @ P)
+
+        # Compute recovery term
+        recovery_term = (c + normalized) * gamma * P
+
+        return infection_term - recovery_term
+
+    def _solve_nimfa_steady_state(self, network, v0 = None) -> dict[str, float]:
         """
         Solve NIMFA equations for meta-stable (funny term) infection probabilities.
         
         Returns:
             TODO: Dict mapping airport codes to infection probabilities
         """
-       
-        # I cannot guarantee this is correct.
-        # Before fixing I'm looking at evaluation so I know if I'm improving something.
-
-        A = nx.adjacency_matrix(network).todense()
-        tau = self.beta / self.delta_base
-
-        # Epidemic threshold
-        lambda_max = np.real(linalg.eigs(A, k=1, which='LM')[0][0])
-        tau_c = 1.0 / lambda_max
-
-        N = A.shape[0]
-        if v0 is None:
-            v0 = np.full(N, 1e-3)
-
-        def f(v):
-            # Avoid division issues
-            Av = A @ v
-            return v - (tau * Av) / (1 + tau * Av)
-
-        result = optimize.root(f, v0, method='hybr', tol=1e-10)
-        v = np.clip(result.x, 0, 1)
-        return {n: v[i] for i, n in enumerate(airports)}
+        node_list = list(network.nodes())
+        adj_matrix = nx.adjacency_matrix(network).todense()
+        p0 = np.ones(len(node_list))
+        sol = optimize.root(self.mod_equation_set, 
+                            p0,
+                            args = (adj_matrix, self.theta, 1, self.c, 1),
+                            method='hybr',
+                            tol=1e-10)
+        
+        PI = {node_list[idx] : val for idx, val in enumerate(sol.x)}
+        return PI
 
     def run_simulation(self) -> Dict[str, float]:
         """
@@ -112,8 +124,7 @@ class HeterogeneousSISModel:
             return {node: 0.0 for node in self.G.nodes()}
         else:
             # Above threshold - find meta-stable state using NIMFA
-            airports = self.G.nodes()
-            return self._solve_nimfa_steady_state(airports, self.G)
+            return self._solve_nimfa_steady_state(self.G)
 
     def _jensen_shannon_divergence(self, actual: List[float], 
                                 predicted: List[float], base = None) -> float:
