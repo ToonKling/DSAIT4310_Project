@@ -8,6 +8,7 @@ from network_construction import AirportNetworkBuilder
 from heterogeneous_sis_model import HeterogeneousSISModel
 from analysis_paper_dataset import get_airports_with_vulnerability
 import pickle
+import multiprocessing
 
 def plot_scatter_coupled_JS_ROC_AUC(shannon, ranking_quality, label, ax, colormap = 'viridis',show_c = False, show_theta = True):
     # We scatter first the Shannon, then the ranking quality
@@ -28,7 +29,7 @@ def plot_scatter_coupled_JS_ROC_AUC(shannon, ranking_quality, label, ax, colorma
 
     # plt.legend(handles=red_circle,loc='lower right')
 
-def draw_graphs(jdts, ranking_qualities, picked_cs, picked_thetas):
+def draw_graphs(jdts, ranking_qualities, picked_cs, picked_thetas, homogeneous_idx):
     title_dic = {1:'a',2:'b',3:'c'}
     fig, axs = plt.subplots(3,2,figsize = (18,20))
     plt.subplots_adjust(hspace = 0.4)
@@ -38,24 +39,58 @@ def draw_graphs(jdts, ranking_qualities, picked_cs, picked_thetas):
 
         axs[n_network,0].text(0.03, 0.9, s= '('+title_dic[n_network+1]+'1)', fontsize=20,transform=axs[n_network,0].transAxes)
         axs[n_network,1].text(0.03, 0.9, s= '('+title_dic[n_network+1]+'2)', fontsize=20,transform=axs[n_network,1].transAxes)
+
+        if homogeneous_idx != -1:
+            axs[n_network,0].axvline(jdts[name][homogeneous_idx],label = 'homogeneous_SIS',color = 'k',linestyle = ':')
+            axs[n_network,0].hlines(ranking_qualities[name][homogeneous_idx],xmin=0,xmax=0.35,color = 'k',linestyle = ':')
+            axs[n_network,1].axvline(jdts[name][homogeneous_idx],label = 'homogeneous_SIS',color = 'k',linestyle = ':')
+            axs[n_network,1].hlines(ranking_qualities[name][homogeneous_idx],xmin=0,xmax=0.35,color = 'k',linestyle = ':')
+
+    
     plt.show()
     #print(ranking_qualities)
 
 
-def calculate_optimal_taus(networks, avg_vuln, cs_thetas):
-    G1, G2, G3 = networks
-
-    #cs_thetas = itertools.product(np.array([0.00001]), np.array([2.0]))
+def calculate_optimal_taus(networks_dict, avg_vuln, cs_thetas):
+    # G1, G2, G3 = networks
+    
     tau_dict = {}
-    for c, theta in cs_thetas:
-        tau_dict[(c, theta)] = {}
-        for name, network in [('G1', G1), ('G2', G2), ('G3', G3)]:
-            model = HeterogeneousSISModel(G=network, c=c, theta=theta)
+    cs_list = list(cs_thetas) 
+    for name, network in networks_dict.items():#[('G1', G1), ('G2', G2), ('G3', G3)]:
+        model = HeterogeneousSISModel(G=network)
+        for c, theta in cs_list:
+            if (c, theta) not in tau_dict:
+                tau_dict[(c, theta)] = {}
+            model.c = c
+            model.theta = theta
             tau_opt = model.optimize_tau(c, theta, avg_vuln)
             tau_dict[(c, theta)][name] = tau_opt
+
             print(f'Optimal tau for {name}, {c:.3f}, {theta:.3f}: {tau_opt}')
 
     return tau_dict
+
+def calculate_optimal_taus_parallel(networks_dict, avg_vuln, cs_thetas):
+    # G1, G2, G3 = networks
+    n_workers = 3
+    pool = multiprocessing.Pool(n_workers)
+    all_pairs = list(cs_thetas)
+
+    args = [({name: g}, avg_vuln, all_pairs) for name, g in networks_dict.items()]
+    taus_list = pool.starmap(calculate_optimal_taus, args)
+    pool.close()
+    pool.join()
+    merged_taus = {}
+    for tau_dict in taus_list:
+        for c_theta, network_dict in tau_dict.items():
+            if c_theta not in merged_taus:
+                merged_taus[c_theta] = network_dict
+            else:
+                assert len(network_dict.items()) == 1
+                name, g = list(network_dict.items())[0]
+                merged_taus[c_theta][name] = g
+    return merged_taus
+    
 
 
 flight_data = pd.read_csv('data/OnTimePerformance_July2018.csv')
@@ -65,19 +100,18 @@ airports = dict(zip(airports['IATA'], airports['VULN']))
 
 builder = AirportNetworkBuilder(flight_data)
 G1, G2, G3 = builder.build_all_networks()
-
+networks_dict = {'G1':G1, 'G2':G2, 'G3': G3}
 # `c` is a control parameter from the paper, see page 11
-#cs = np.arange(0, 0.02, 0.005) # TODO change back to 0.02
-cs = np.arange(0, 2.4, 0.4) # TODO change back to 0.02
-
+#cs = np.arange(0, 2.2, 0.2) # TODO change back to 0.02
+cs = np.arange(0.02, 2.2, 0.02) # TODO change back to 0.02
 # `theta` is the other control parameter from paper on page 11. In their code it is called `delta` for some reason.
-#thetas = np.arange(1, 2.1, 0.1)
-thetas = np.arange(0, 2.4, 0.4)
-thetas = np.array([0,1,2])
-# This is all combinations of our control variables, aka all dots in figure 5.
-cs_thetas = itertools.product(cs, thetas)
-cs_thetas_copy = itertools.product(cs, thetas)
+thetas = np.arange(0, 2.1, 0.1)
+#thetas = np.arange(0, 2.2, 0.2)
 
+# This is all combinations of our control variables, aka all dots in figure 5.
+cs_thetas = list(itertools.product(cs, thetas))
+#cs_thetas_copy = itertools.product(cs, thetas)
+cs_thetas_size = len(cs_thetas)
 jsds = {'G1': [], 'G2' : [], 'G3': []}
 recognition_qualities = {'G1': [], 'G2' : [], 'G3': []}
 picked_cs = {'G1': [], 'G2' : [], 'G3': []}
@@ -86,35 +120,56 @@ picked_thetas = {'G1': [], 'G2' : [], 'G3': []}
 avg_vuln = np.mean(list(airports.values()))
 filename = f'data/optimal_taus_c_{cs.min()}_{cs.max()}_{cs[1]-cs[0]}_th_{thetas.min()}_{thetas.max()}_{thetas[1]-thetas[0]}'.replace('.',',')
 CALC_OPTIMAL_TAUS = True
-SAVE_OPTIMAL_TAUS = False
+SAVE_OPTIMAL_TAUS = True
 if CALC_OPTIMAL_TAUS:
-    optimal_taus = calculate_optimal_taus((G1, G2, G3), avg_vuln, cs_thetas_copy) # Takes a looooooong time, do once and save taus
+    start = time.time()
+    optimal_taus = calculate_optimal_taus_parallel(networks_dict, avg_vuln, cs_thetas)
+    #optimal_taus = calculate_optimal_taus(networks_dict, avg_vuln, cs_thetas_copy) # Takes a looooooong time, do once and save taus
+    print(f'Took {time.time() - start:.3f} seconds')
+
     if SAVE_OPTIMAL_TAUS:
         with open(filename, 'wb') as f:
-            pickle.dump(filename, f)
+            pickle.dump(optimal_taus, f)
 else:
     with open(filename, 'rb') as f:
         optimal_taus = pickle.load(f)
 
+homogeneous_idx = -1
+i = 0
 for c, theta in cs_thetas:
+    if i % 50 == 0:
+        print(f'{i}/{cs_thetas_size}')
+    if np.isclose(c, 0, rtol=1e-7) and np.isclose(theta, 0, rtol=1e-7):
+        homogeneous_idx = i
+    i += 1
+
     for name, network in [('G1', G1), ('G2', G2), ('G3', G3)]:
         # DETERMINE OPTIMAL delta first and use that! See paper pg 11
         optimal_tau = optimal_taus[(c, theta)][name]
-        print(f'Optimal tau: {optimal_tau}')
         start = time.time()
-        print(f'Evaluating model for c={c} and theta={theta} on network {name}')
         model = HeterogeneousSISModel(G=network, c=c, theta=theta, tau=optimal_tau)
+        pred = model.run_simulation()
+        thr = model.epidemic_threshold
+        predicted_mean = np.mean(list(pred.values()))
+
+        assert np.isclose(predicted_mean, avg_vuln, rtol=0.05)
         eval = model.evaluate_performance(airports)
         jsd, recognition_quality = eval['jsd'], eval['recognition_quality']
+        bad = jsd > 0.35 or recognition_quality < 0.6
+
+        if jsd > 0.35 or recognition_quality < 0.6:
+            #print(f'Bad -> c: {c}, theta: {theta} -> jsd: {jsd:.3f} rq: {recognition_quality:.3f} Optimal tau: {optimal_tau}')
+            pass
+
         jsds[name].append(jsd)
         recognition_qualities[name].append(recognition_quality)
         picked_cs[name].append(c)
         picked_thetas[name].append(theta)
-        print(f'Took {time.time() - start:.3f} seconds')
+        #print(f'Took {time.time() - start:.3f} seconds')
 
-print(f'JSDS: \n{jsds['G2']}\n')
-print(f'Recognition qualities: \n{recognition_qualities['G2']}\n')
+# print(f'JSDS: \n{jsds['G2']}\n')
+# print(f'Recognition qualities: \n{recognition_qualities['G2']}\n')
 
-draw_graphs(jsds, recognition_qualities, picked_cs, picked_thetas)
+draw_graphs(jsds, recognition_qualities, picked_cs, picked_thetas, homogeneous_idx=homogeneous_idx)
 
 

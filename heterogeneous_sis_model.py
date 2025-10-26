@@ -33,7 +33,7 @@ class HeterogeneousSISModel:
         self.theta = theta
         self.beta = beta
         self.tau = tau
-        self.delta_base = delta_base
+        self.delta_base = 1/tau # Not sure this is needed
 
         # TODO: will be calculated by helper functions (Tasks 1-3)
         self.recovery_rates = {}
@@ -111,14 +111,14 @@ class HeterogeneousSISModel:
         # Compute node strengths (sum of edges)
         g_sum = np.sum(g_ij, axis=1).A1 if hasattr(g_ij, "A1") else np.sum(g_ij, axis=1)
         max_g_sum = np.max(g_sum)
-        normalized = g_sum/ max_g_sum
+        normalized = g_sum / max_g_sum
 
         # Infection term: τ * (1 - P_i) * Σ_j a_ij P_j
         infection_term = tau * (1 - P) * (g_ij @ P)
 
         # Recovery term: 
-        # delta_i * P_i  where delta_i = gamma * (c + s_i/s_max)^a
-        recovery_term = gamma * ((c + normalized) ** alpha) * P
+        # delta_i * P_i  where delta_i = gamma * (c + (s_i/s_max)^a)
+        recovery_term = gamma * (c + normalized ** alpha) * P
 
         return infection_term - recovery_term
     
@@ -298,11 +298,13 @@ class HeterogeneousSISModel:
         but in the notebooks they set gamma to 1 and optimize for tau. This is equivalent since if we divide the governing
         equation by gamma on both sides the gamma term on the infection rate dissappears and beta becomes tau.
         """
-        return (np.mean(list(self.mod_simulate_steady_state_SIS(tau,1,c,theta).values()))- avg_vuln)**2
+        return (np.mean(list(self.mod_simulate_steady_state_SIS(tau,1,c,theta).values())) - avg_vuln) ** 2
     
 
     def optimize_tau(self, c, theta, avg_vuln):
         f = lambda tau: self.mean_square_simulation(tau, c, theta, avg_vuln)
-        tau_optimal = scipy.optimize.minimize_scalar(f,bounds=(0,2),method='bounded',options = {'disp':False}).x
+        res = scipy.optimize.minimize_scalar(f,bounds=(0,2),method='bounded',options = {'disp':False})
+        assert res.success
+        tau_optimal = res.x
         return tau_optimal
     
