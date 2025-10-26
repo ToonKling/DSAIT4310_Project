@@ -57,7 +57,11 @@ class HeterogeneousSISModel:
         Returns:
             TODO: Dict mapping airport codes to recovery rates
         """
-        strengths = {n: self.G.degree(n, weight="weight") for n in self.G.nodes()}
+        # Node strength: sum of incident edge weights. Fall back to 1.0 if an edge has no 'weight' attribute.
+        strengths = {
+            n: sum(data.get('weight', 1.0) for _, _, data in self.G.edges(n, data=True))
+            for n in self.G.nodes()
+        }
         s_max = max(strengths.values()) if strengths else 0.0
         if s_max == 0:
             # No edges / zero weights: all recoveries collapse to δ * c
@@ -236,7 +240,7 @@ class HeterogeneousSISModel:
                 top_actual = set(a_ranked[:n_top])
                 top_pred = set(p_ranked[:n_top])
                 overlap = len(top_actual & top_pred)
-                r_values[i] = overlap / float(n_top)
+                r_values[i] = overlap / len(top_actual)
 
         # Numerical integration over sampled f using trapezoid rule
         xi = np.trapezoid(r_values, f_values)
