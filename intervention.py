@@ -31,12 +31,13 @@ uniform_theta = {(t, f) : 1 for (t, f, _) in G1.edges.data("weight", default=1)}
 results_uniform = [measure_effect(theta = uniform_theta, intervention = True) for _ in range(100)]
 
 degrees = dict(G1.degree())
+# Theta currently requires a weight for a link, but that's probably not exactly correct
+# As can be seen here
 degree_theta = {(u, v) : degrees[u] + degrees[v] for u, v in G1.edges()}
-print(f'Degree theta: {degree_theta}')
 results_theta = [measure_effect(theta = degree_theta, intervention = True) for _ in range(100)]
 
 plt.figure(figsize=(6, 5))
-plt.boxplot([results_default, results_uniform, results_theta], labels=['Base case', 'Uniform intervention', 'Degree'])
+plt.boxplot([results_default, results_uniform, results_theta], labels=['Base case', 'Uniform intervention', 'Degree intervention'])
 plt.ylabel(f"Average vulnerability")
 
 plt.show()
