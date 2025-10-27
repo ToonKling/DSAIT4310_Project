@@ -70,6 +70,7 @@ class HeterogeneousSISModel:
         recovery_rates: Dict[str, float] = {}
         for n, s_i in strengths.items():
             recovery_rates[n] = float(self.delta_base * (self.c + (s_i / s_max) ** self.theta))
+
         return recovery_rates
 
     def _calculate_epidemic_threshold(self) -> float:
@@ -307,4 +308,10 @@ class HeterogeneousSISModel:
         assert res.success
         tau_optimal = res.x
         return tau_optimal
-    
+
+    def intervention_random(self):
+        edges = list(self.G.edges.data("weight", default=1))
+        edges_to_change = random.sample(edges, 20)
+        for f, t, current_w in edges_to_change:
+            self.G[f][t]['weight'] = min(1, current_w + 0.5)
+

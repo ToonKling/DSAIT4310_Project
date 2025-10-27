@@ -130,7 +130,7 @@ class AirportNetworkBuilder:
         print(f"Flight time range: {flight_data_with_time['FLIGHT_TIME'].min():.0f}-{flight_data_with_time['FLIGHT_TIME'].max():.0f} minutes")
         return G3
 
-    def build_all_networks(self):
+    def build_all_networks(self) -> tuple[nx.Graph, nx.Graph, nx.Graph]:
         CACHE_FILE = "./all_networks.cache"
         if os.path.exists(CACHE_FILE):
             with open(CACHE_FILE, "rb") as f:
