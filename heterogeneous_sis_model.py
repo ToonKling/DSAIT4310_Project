@@ -309,9 +309,14 @@ class HeterogeneousSISModel:
         tau_optimal = res.x
         return tau_optimal
 
-    def intervention_random(self):
-        edges = list(self.G.edges.data("weight", default=1))
-        edges_to_change = random.sample(edges, 20)
-        for f, t, current_w in edges_to_change:
-            self.G[f][t]['weight'] = max(0, current_w - 0.5)
+    def intervention_random(self, d_inf: float = 2, theta: dict[tuple[str, str], float] = {}):
+        # Normalize theta to 0-1, with sum = 1
+        sum_theta = sum(theta.values())
+        normalized_theta = {k : v / sum_theta for k, v in theta.items()}
+        # Spread the change in infection chance across our nodes
+        delta_inf = {k : v * d_inf for k, v in normalized_theta.items()}
+
+        for (f, t), theta_i in delta_inf.items():
+            current_w = self.G[f][t]['weight']
+            self.G[f][t]['weight'] = max(0, current_w - theta_i)
 
