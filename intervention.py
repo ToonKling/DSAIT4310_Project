@@ -24,7 +24,7 @@ def measure_effect(intervention = False) -> float:
     return performance
 
 results_default = [measure_effect()]
-results_random  = [measure_effect(intervention = True) for _ in range(10)]
+results_random  = [measure_effect(intervention = True) for _ in range(100)]
 
 plt.figure(figsize=(6, 5))
 plt.boxplot([results_default, results_random], labels=['Base case', 'Random intervention'])

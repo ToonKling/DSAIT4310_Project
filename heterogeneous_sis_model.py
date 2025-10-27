@@ -313,5 +313,5 @@ class HeterogeneousSISModel:
         edges = list(self.G.edges.data("weight", default=1))
         edges_to_change = random.sample(edges, 20)
         for f, t, current_w in edges_to_change:
-            self.G[f][t]['weight'] = min(1, current_w + 0.5)
+            self.G[f][t]['weight'] = max(0, current_w - 0.5)
 
