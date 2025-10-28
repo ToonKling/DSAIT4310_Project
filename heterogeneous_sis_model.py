@@ -142,7 +142,7 @@ class HeterogeneousSISModel:
         PI = {node_list[idx] : val for idx, val in enumerate(sol.x)}
         return PI
 
-    def _solve_nimfa_steady_state(self, network, v0 = None) -> dict[str, float]:
+    def _solve_nimfa_steady_state(self, network, recovery_factors=1.0, v0 = None) -> dict[str, float]:
         """
         Solve NIMFA equations for meta-stable (funny term) infection probabilities.
         
@@ -154,13 +154,13 @@ class HeterogeneousSISModel:
         p0 = np.ones(len(node_list))
         sol = optimize.root(self.mod_equation_set, 
                             p0,
-                            args = (adj_matrix, self.tau, 1, self.c, self.theta),
+                            args = (adj_matrix, self.tau, recovery_factors, self.c, self.theta),
                             method='hybr')
         
         PI = {node_list[idx] : val for idx, val in enumerate(sol.x)}
         return PI
 
-    def run_simulation(self) -> Dict[str, float]:
+    def run_simulation(self, recovery_factors = 1.0) -> Dict[str, float]:
         """
         Run SIS simulation and return predicted vulnerabilities.
         I think this is how it goes?
@@ -168,7 +168,7 @@ class HeterogeneousSISModel:
         Returns:
             Dict mapping airport codes to predicted vulnerability values
         """
-        return self._solve_nimfa_steady_state(self.G)
+        return self._solve_nimfa_steady_state(self.G, recovery_factors)
 
     def _jensen_shannon_divergence(self, actual: List[float], 
                                 predicted: List[float], base: float = None) -> float:
