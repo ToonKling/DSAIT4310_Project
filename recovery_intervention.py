@@ -1,8 +1,8 @@
-from email.mime import base
 import pandas as pd
 import matplotlib.pyplot as plt
 import pickle
 import numpy as np
+import networkx as nx
 
 from heterogeneous_sis_model import HeterogeneousSISModel
 from network_analysis import prepare_data
@@ -60,7 +60,41 @@ def run_intervention_experiment(budget: float, network, c: float, theta: float, 
     print(np.mean(degree_exp_rho_2))
     results_degree_exp_2 = measure_effect_delta_base(recovery_factors=degree_exp_rho_2, model=model)
 
-    return {'default': results_default,'uniform': results_uniform, 'degree': results_degree, 'degree_exp_1': results_degree_exp, 'degree_exp_2': results_degree_exp_2}
+    # Clustering coefficient
+    clustering = list(nx.clustering(network, weight='weight').values())
+    clustering_rho = distribute_budget(budget, clustering)
+    results_clustering = measure_effect_delta_base(recovery_factors=clustering_rho, model=model)
+
+    # Betweenness Centrality
+    H = network.copy()
+    for _, _, d in H.edges(data=True):
+        w = d.get('weight', 1.0)
+        d['inv_weight'] = 1.0 / w if w > 0 else np.inf
+    betweenness = list(nx.betweenness_centrality(H, weight='inv_weight').values())
+    betweenness_rho = distribute_budget(budget, betweenness)
+    results_between = measure_effect_delta_base(recovery_factors=betweenness_rho, model=model)
+
+    # Closeness Centrality
+    closeness = list(nx.closeness_centrality(network, distance='weight').values())
+    closeness_rho = distribute_budget(budget, closeness)
+    results_closeness = measure_effect_delta_base(recovery_factors=closeness_rho, model=model)
+
+    # Principal Eigenvector component
+    eigenvector = list(nx.eigenvector_centrality(network, weight='weight').values())
+    eigenvector_rho = distribute_budget(budget, eigenvector)
+    results_eigenvector = measure_effect_delta_base(recovery_factors=eigenvector_rho, model=model)
+
+    return {
+        'default': results_default,
+        'uniform': results_uniform,
+        'degree': results_degree,
+        'degree_exp_1': results_degree_exp,
+        'degree_exp_2': results_degree_exp_2,
+        'clustering': results_clustering,
+        'between': results_between,
+        'close': results_closeness,
+        'eigenvector': results_eigenvector,
+    }
 
 
 def plot_box(results_dict):
@@ -79,6 +113,10 @@ def plot_results_varying_budget(budgets, data: pd.DataFrame):
     degree_list = data['degree']
     degree_exp_1 = data['degree_exp_1']
     degree_exp_2 = data['degree_exp_2']
+    clustering = data['clustering']
+    between = data['between']
+    close = data['close']
+    eigenvector = data['eigenvector']
 
     plt.figure(figsize=(8, 6))
     plt.scatter(budgets, default_list, c='tab:blue', label='Base case', alpha=0.9)
@@ -95,6 +133,18 @@ def plot_results_varying_budget(budgets, data: pd.DataFrame):
 
     plt.scatter(budgets, degree_exp_2, c='tab:purple', label='Degree intervention a = 2', alpha=0.9)
     plt.plot(budgets, degree_exp_2, c='tab:purple', alpha=0.4)
+
+    plt.scatter(budgets, clustering, c='tab:brown', label='Clustering coefficient', alpha=0.9)
+    plt.plot(budgets, clustering, c='tab:brown', alpha=0.4)
+
+    plt.scatter(budgets, between, c='tab:pink', label='Betweenness Centrality', alpha=0.9)
+    plt.plot(budgets, between, c='tab:pink', alpha=0.4)
+
+    plt.scatter(budgets, close, c='tab:gray', label='Closeness Centrality', alpha=0.9)
+    plt.plot(budgets, close, c='tab:gray', alpha=0.4)
+
+    plt.scatter(budgets, eigenvector, c='tab:olive', label='Principal Eigenvector Component', alpha=0.9)
+    plt.plot(budgets, eigenvector, c='tab:olive', alpha=0.4)
 
     plt.xlabel('Budget')
     plt.ylabel('Average vulnerability')
