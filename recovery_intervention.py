@@ -21,7 +21,7 @@ def distribute_budget(budget, weights) -> list[float]:
     factors = 1.0 + alpha * weights   # exact average T
     return factors
 
-def run_intervention_experiment(budget: float, network, c: float, theta: float, tau: float) -> dict[str,]:
+def run_intervention_experiment(budget: float, network, c: float, theta: float, tau: float, vuln_threshold: float = None) -> dict[str,]:
     n_nodes = len(network.nodes())
     model = HeterogeneousSISModel(G=network, c=c, theta=theta, tau=tau)
     base_factors = np.ones(n_nodes) # No change in recovery rate, base case
@@ -84,6 +84,30 @@ def run_intervention_experiment(budget: float, network, c: float, theta: float, 
     eigenvector_rho = distribute_budget(budget, eigenvector)
     results_eigenvector = measure_effect_delta_base(recovery_factors=eigenvector_rho, model=model)
 
+    # --- Vulnerability-threshold based intervention ---
+    # If a threshold is provided, compute baseline node vulnerabilities and
+    # allocate the budget only among nodes whose baseline vulnerability > vuln_threshold.
+    results_threshold = None
+    if vuln_threshold is not None:
+        # compute baseline vulnerabilities under base_factors (no intervention)
+        base_vulns = model.run_simulation(recovery_factors=base_factors)
+        # preserve node order consistent with model expectations
+        vuln_vals = np.array([base_vulns[n] for n in base_vulns.keys()], dtype=float)
+
+        # create weights: only nodes with vulnerability > threshold keep their vuln as weight
+        mask = vuln_vals > float(vuln_threshold)
+
+        degrees_dict = dict(network.degree(weight=None))
+        deg_vals = np.array([degrees_dict[n] for n in base_vulns.keys()], dtype=float)
+        # alpha = 1.5
+        deg_alpha_half = np.power(deg_vals, 1.5)
+        # Mask degrees by vulnerability threshold (only nodes exceeding threshold get weight)
+        masked_deg_weights = deg_alpha_half * mask.astype(float)
+
+        degree_alpha_half_rho = distribute_budget(budget, masked_deg_weights)
+        results_threshold = measure_effect_delta_base(recovery_factors=degree_alpha_half_rho, model=model)
+        # print(f"Degree alpha=2 (thresholded) intervention: mean factor {np.mean(degree_alpha_half_rho):.4f}")
+
     return {
         'default': results_default,
         'uniform': results_uniform,
@@ -94,6 +118,7 @@ def run_intervention_experiment(budget: float, network, c: float, theta: float, 
         'between': results_between,
         'close': results_closeness,
         'eigenvector': results_eigenvector,
+        'threshold': results_threshold,
     }
 
 
@@ -192,6 +217,7 @@ def plot_results_varying_budget(budgets, data: pd.DataFrame):
     between = data['between']
     close = data['close']
     eigenvector = data['eigenvector']
+    threshold = data['threshold']
 
     plt.figure(figsize=(8, 6))
     plt.scatter(budgets, default_list, c='tab:blue', label='Base case', alpha=0.9)
@@ -220,6 +246,9 @@ def plot_results_varying_budget(budgets, data: pd.DataFrame):
 
     plt.scatter(budgets, eigenvector, c='tab:olive', label='Principal Eigenvector Component', alpha=0.9)
     plt.plot(budgets, eigenvector, c='tab:olive', alpha=0.4)
+
+    plt.scatter(budgets, threshold, c='tab:cyan', label='Vuln-threshold degree intervention', alpha=0.9)
+    plt.plot(budgets, threshold, c='tab:cyan', alpha=0.4)
 
     plt.xlabel('Budget')
     plt.ylabel('Average vulnerability')
@@ -253,7 +282,7 @@ RECOVERY_BUDGET = 1.05 # How much the average recovery can increase
 budgets = np.arange(1, 1.2, 0.02)
 plot_data = []
 for budget in budgets:
-    results = run_intervention_experiment(budget, BEST_NETWORK, BEST_C, BEST_THETA, BEST_TAU)
+    results = run_intervention_experiment(budget, BEST_NETWORK, BEST_C, BEST_THETA, BEST_TAU, vuln_threshold=0.2)
     plot_data.append(results)
 
 plot_data = pd.DataFrame(plot_data)
@@ -261,23 +290,23 @@ plot_data = pd.DataFrame(plot_data)
 plot_results_varying_budget(budgets, plot_data)
 
 
-# --- Alpha sweep experiment (degree exponent) with fixed budget ---
-intervention_budget = 1.12  # fixed budget requested for alpha sweep
-# choose alphas to test (include small, typical and larger exponents)
-alphas = np.arange(0, 10, 0.5)  # alphas from 0 to 10
+# # --- Alpha sweep experiment (degree exponent) with fixed budget ---
+# intervention_budget = 1.12  # fixed budget requested for alpha sweep
+# # choose alphas to test (include small, typical and larger exponents)
+# alphas = np.arange(0, 10, 0.5)  # alphas from 0 to 10
 
-print(f"Running alpha sweep for degree-based intervention with budget={intervention_budget}...")
-alpha_results = run_alpha_sweep(intervention_budget, BEST_NETWORK, BEST_C, BEST_THETA, BEST_TAU, alphas)
+# print(f"Running alpha sweep for degree-based intervention with budget={intervention_budget}...")
+# alpha_results = run_alpha_sweep(intervention_budget, BEST_NETWORK, BEST_C, BEST_THETA, BEST_TAU, alphas)
 
-print('Alpha sweep results (alpha -> average vulnerability):')
-for a in sorted(alpha_results.keys()):
-    print(f"  alpha={a}: {alpha_results[a]}")
+# print('Alpha sweep results (alpha -> average vulnerability):')
+# for a in sorted(alpha_results.keys()):
+#     print(f"  alpha={a}: {alpha_results[a]}")
 
-plot_alpha_sweep(alpha_results)
+# plot_alpha_sweep(alpha_results)
 
 
-# --- Alpha distribution sweep (boxplots) ---
-print(f"Running alpha distribution sweep (0..10 step 0.5) with budget={intervention_budget}...")
-alpha_dist = run_alpha_distribution_sweep(intervention_budget, BEST_NETWORK, BEST_C, BEST_THETA, BEST_TAU, alphas)
-print('Alpha distribution sweep completed. Showing boxplot...')
-plot_alpha_distribution(alpha_dist)
+# # --- Alpha distribution sweep (boxplots) ---
+# print(f"Running alpha distribution sweep (0..10 step 0.5) with budget={intervention_budget}...")
+# alpha_dist = run_alpha_distribution_sweep(intervention_budget, BEST_NETWORK, BEST_C, BEST_THETA, BEST_TAU, alphas)
+# print('Alpha distribution sweep completed. Showing boxplot...')
+# plot_alpha_distribution(alpha_dist)
