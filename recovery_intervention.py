@@ -135,6 +135,43 @@ def plot_alpha_sweep(alpha_results: dict):
     plt.show()
 
 
+def run_alpha_distribution_sweep(budget: float, network, c: float, theta: float, tau: float, alphas: list[float]) -> dict:
+    """Run model for each alpha and return full vulnerability lists per alpha."""
+    results = {}
+    degrees = [v for v in dict(network.degree(weight=None)).values()]
+    for a in alphas:
+        if a == 0:
+            deg_weights = np.ones_like(degrees, dtype=float)
+        else:
+            deg_weights = [float(d) ** a for d in degrees]
+
+        rho = distribute_budget(budget, np.array(deg_weights, dtype=float))
+        model = HeterogeneousSISModel(G=network, c=c, theta=theta, tau=tau)
+        vulns = model.run_simulation(recovery_factors=rho)
+        vals = list(vulns.values()) if vulns else []
+        results[a] = vals
+
+    return results
+
+
+def plot_alpha_distribution(alpha_dist: dict):
+    """Plot boxplots of vulnerability distributions for each alpha."""
+    alphas = sorted(alpha_dist.keys())
+    data = [alpha_dist[a] for a in alphas]
+
+    plt.figure(figsize=(12, 6))
+    plt.boxplot(data, positions=alphas, widths=0.3, showfliers=False)
+    plt.xlabel('Alpha (degree exponent)')
+    plt.ylabel('Vulnerability')
+    plt.title('Distribution of node vulnerabilities vs Alpha (boxplots)')
+    plt.grid(True, axis='y')
+    # reduce xticks for readability
+    step = max(1, int(len(alphas) / 10))
+    plt.xticks(alphas[::step], [f"{a:.1f}" for a in alphas[::step]])
+    plt.tight_layout()
+    plt.show()
+
+
 def plot_box(results_dict):
     results_default = results_dict['default']
     results_uniform = results_dict['uniform']
@@ -227,7 +264,7 @@ plot_results_varying_budget(budgets, plot_data)
 # --- Alpha sweep experiment (degree exponent) with fixed budget ---
 intervention_budget = 1.12  # fixed budget requested for alpha sweep
 # choose alphas to test (include small, typical and larger exponents)
-alphas = np.arange(0, 6, 0.1)  # alphas from 0 to 5
+alphas = np.arange(0, 10, 0.5)  # alphas from 0 to 10
 
 print(f"Running alpha sweep for degree-based intervention with budget={intervention_budget}...")
 alpha_results = run_alpha_sweep(intervention_budget, BEST_NETWORK, BEST_C, BEST_THETA, BEST_TAU, alphas)
@@ -237,3 +274,10 @@ for a in sorted(alpha_results.keys()):
     print(f"  alpha={a}: {alpha_results[a]}")
 
 plot_alpha_sweep(alpha_results)
+
+
+# --- Alpha distribution sweep (boxplots) ---
+print(f"Running alpha distribution sweep (0..10 step 0.5) with budget={intervention_budget}...")
+alpha_dist = run_alpha_distribution_sweep(intervention_budget, BEST_NETWORK, BEST_C, BEST_THETA, BEST_TAU, alphas)
+print('Alpha distribution sweep completed. Showing boxplot...')
+plot_alpha_distribution(alpha_dist)
