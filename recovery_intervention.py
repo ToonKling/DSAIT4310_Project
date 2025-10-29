@@ -97,6 +97,44 @@ def run_intervention_experiment(budget: float, network, c: float, theta: float, 
     }
 
 
+def run_alpha_sweep(budget: float, network, c: float, theta: float, tau: float, alphas: list[float]) -> dict:
+    """Run degree-based intervention for multiple alpha exponents.
+
+    Returns a dict mapping alpha -> average vulnerability (float).
+    """
+    n_nodes = len(network.nodes())
+    model = HeterogeneousSISModel(G=network, c=c, theta=theta, tau=tau)
+
+    # degree values (unweighted count)
+    degrees = [v for v in dict(network.degree(weight=None)).values()]
+    results = {}
+    for a in alphas:
+        if a == 0:
+            # alpha==0 would make all weights 1 -> equivalent to uniform; keep it valid
+            deg_weights = np.ones_like(degrees, dtype=float)
+        else:
+            deg_weights = [float(d) ** a for d in degrees]
+
+        rho = distribute_budget(budget, np.array(deg_weights, dtype=float))
+        perf = measure_effect_delta_base(recovery_factors=rho, model=model)
+        results[a] = perf
+
+    return results
+
+
+def plot_alpha_sweep(alpha_results: dict):
+    alphas = sorted(alpha_results.keys())
+    values = [alpha_results[a] for a in alphas]
+
+    plt.figure(figsize=(7, 4))
+    plt.plot(alphas, values, marker='o')
+    plt.xlabel('Alpha (degree exponent)')
+    plt.ylabel('Average vulnerability')
+    plt.title('Degree-intervention performance vs alpha (fixed budget of 1.12)')
+    plt.grid(True)
+    plt.show()
+
+
 def plot_box(results_dict):
     results_default = results_dict['default']
     results_uniform = results_dict['uniform']
@@ -184,3 +222,18 @@ for budget in budgets:
 plot_data = pd.DataFrame(plot_data)
 
 plot_results_varying_budget(budgets, plot_data)
+
+
+# --- Alpha sweep experiment (degree exponent) with fixed budget ---
+intervention_budget = 1.12  # fixed budget requested for alpha sweep
+# choose alphas to test (include small, typical and larger exponents)
+alphas = np.arange(0, 6, 0.1)  # alphas from 0 to 5
+
+print(f"Running alpha sweep for degree-based intervention with budget={intervention_budget}...")
+alpha_results = run_alpha_sweep(intervention_budget, BEST_NETWORK, BEST_C, BEST_THETA, BEST_TAU, alphas)
+
+print('Alpha sweep results (alpha -> average vulnerability):')
+for a in sorted(alpha_results.keys()):
+    print(f"  alpha={a}: {alpha_results[a]}")
+
+plot_alpha_sweep(alpha_results)
