@@ -84,15 +84,19 @@ def run_intervention_experiment(budget: float, network, c: float, theta: float, 
     eigenvector_rho = distribute_budget(budget, eigenvector)
     results_eigenvector = measure_effect_delta_base(recovery_factors=eigenvector_rho, model=model)
 
+    # just use vulnerability
+    # compute baseline vulnerabilities under base_factors (no intervention)
+    base_vulns = model.run_simulation(recovery_factors=base_factors)
+    # preserve node order consistent with model expectations
+    vuln_vals = np.array([base_vulns[n] for n in base_vulns.keys()], dtype=float)
+    vuln_rho = distribute_budget(budget, vuln_vals)
+    results_vulns = measure_effect_delta_base(recovery_factors=vuln_rho, model=model)
+
     # --- Vulnerability-threshold based intervention ---
     # If a threshold is provided, compute baseline node vulnerabilities and
     # allocate the budget only among nodes whose baseline vulnerability > vuln_threshold.
     results_threshold = None
     if vuln_threshold is not None:
-        # compute baseline vulnerabilities under base_factors (no intervention)
-        base_vulns = model.run_simulation(recovery_factors=base_factors)
-        # preserve node order consistent with model expectations
-        vuln_vals = np.array([base_vulns[n] for n in base_vulns.keys()], dtype=float)
 
         # create weights: only nodes with vulnerability > threshold keep their vuln as weight
         mask = vuln_vals > float(vuln_threshold)
@@ -119,6 +123,7 @@ def run_intervention_experiment(budget: float, network, c: float, theta: float, 
         'close': results_closeness,
         'eigenvector': results_eigenvector,
         'threshold': results_threshold,
+        'vulnerability': results_vulns
     }
 
 
@@ -218,6 +223,7 @@ def plot_results_varying_budget(budgets, data: pd.DataFrame):
     close = data['close']
     eigenvector = data['eigenvector']
     threshold = data['threshold']
+    vulnerability = data['vulnerability']
 
     plt.figure(figsize=(8, 6))
     plt.scatter(budgets, default_list, c='tab:blue', label='Base case', alpha=0.9)
@@ -249,6 +255,9 @@ def plot_results_varying_budget(budgets, data: pd.DataFrame):
 
     plt.scatter(budgets, threshold, c='tab:cyan', label='Vuln-threshold degree intervention', alpha=0.9)
     plt.plot(budgets, threshold, c='tab:cyan', alpha=0.4)
+
+    plt.scatter(budgets, vulnerability, c='m', label='Vulnerability intervention', alpha=0.9)
+    plt.plot(budgets, vulnerability, c='m', alpha=0.4)
 
     plt.xlabel('Budget')
     plt.ylabel('Average vulnerability')
