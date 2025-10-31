@@ -62,9 +62,12 @@ def run_intervention_experiment(budget: float, network, c: float, theta: float, 
 
     # Clustering coefficient
     clustering = list(nx.clustering(network, weight='weight').values())
-    clustering = [1 / n if n != 0 else 0 for n in clustering]
     clustering_rho = distribute_budget(budget, clustering)
     results_clustering = measure_effect_delta_base(recovery_factors=clustering_rho, model=model)
+
+    inverse_clustering = [1 / n if n != 0 else 0 for n in clustering]
+    inverse_clustering_rho = distribute_budget(budget, inverse_clustering)
+    inverse_results_clustering = measure_effect_delta_base(recovery_factors=inverse_clustering_rho, model=model)
 
     # Betweenness Centrality
     H = network.copy()
@@ -120,6 +123,7 @@ def run_intervention_experiment(budget: float, network, c: float, theta: float, 
         'degree_exp_1': results_degree_exp,
         'degree_exp_2': results_degree_exp_2,
         'clustering': results_clustering,
+        'inverse_clustering': inverse_results_clustering,
         'between': results_between,
         'close': results_closeness,
         'eigenvector': results_eigenvector,
@@ -220,6 +224,7 @@ def plot_results_varying_budget(budgets, data: pd.DataFrame):
     degree_exp_1 = data['degree_exp_1']
     degree_exp_2 = data['degree_exp_2']
     clustering = data['clustering']
+    inverse_clustering = data['inverse_clustering']
     between = data['between']
     close = data['close']
     eigenvector = data['eigenvector']
@@ -233,32 +238,35 @@ def plot_results_varying_budget(budgets, data: pd.DataFrame):
     plt.scatter(budgets, uniform_list, c='tab:orange', label='Uniform intervention', alpha=0.9)
     plt.plot(budgets, uniform_list, c='tab:orange', alpha=0.4)
 
-    plt.scatter(budgets, degree_list, c='tab:green', label='Degree intervention', alpha=0.9)
-    plt.plot(budgets, degree_list, c='tab:green', alpha=0.4)
+    # plt.scatter(budgets, degree_list, c='tab:green', label='Degree intervention', alpha=0.9)
+    # plt.plot(budgets, degree_list, c='tab:green', alpha=0.4)
 
-    plt.scatter(budgets, degree_exp_1, c='tab:red', label='Degree intervention a = 1.5', alpha=0.9)
-    plt.plot(budgets, degree_exp_1, c='tab:red', alpha=0.4)
+    # plt.scatter(budgets, degree_exp_1, c='tab:red', label='Degree intervention a = 1.5', alpha=0.9)
+    # plt.plot(budgets, degree_exp_1, c='tab:red', alpha=0.4)
 
-    plt.scatter(budgets, degree_exp_2, c='tab:purple', label='Degree intervention a = 2', alpha=0.9)
-    plt.plot(budgets, degree_exp_2, c='tab:purple', alpha=0.4)
+    # plt.scatter(budgets, degree_exp_2, c='tab:purple', label='Degree intervention a = 2', alpha=0.9)
+    # plt.plot(budgets, degree_exp_2, c='tab:purple', alpha=0.4)
 
-    plt.scatter(budgets, clustering, c='tab:brown', label='Inverse Clustering coefficient', alpha=0.9)
+    plt.scatter(budgets, clustering, c='tab:brown', label='Clustering coefficient', alpha=0.9)
     plt.plot(budgets, clustering, c='tab:brown', alpha=0.4)
 
-    plt.scatter(budgets, between, c='tab:pink', label='Betweenness Centrality', alpha=0.9)
-    plt.plot(budgets, between, c='tab:pink', alpha=0.4)
+    plt.scatter(budgets, inverse_clustering, c='tab:pink', label='Inverse Clustering coefficient', alpha=0.9)
+    plt.plot(budgets, inverse_clustering, c='tab:pink', alpha=0.4)
 
-    plt.scatter(budgets, close, c='tab:gray', label='Closeness Centrality', alpha=0.9)
-    plt.plot(budgets, close, c='tab:gray', alpha=0.4)
+    # plt.scatter(budgets, between, c='tab:pink', label='Betweenness Centrality', alpha=0.9)
+    # plt.plot(budgets, between, c='tab:pink', alpha=0.4)
 
-    plt.scatter(budgets, eigenvector, c='tab:olive', label='Principal Eigenvector Component', alpha=0.9)
-    plt.plot(budgets, eigenvector, c='tab:olive', alpha=0.4)
+    # plt.scatter(budgets, close, c='tab:gray', label='Closeness Centrality', alpha=0.9)
+    # plt.plot(budgets, close, c='tab:gray', alpha=0.4)
 
-    plt.scatter(budgets, threshold, c='tab:cyan', label='Vuln-threshold degree intervention', alpha=0.9)
-    plt.plot(budgets, threshold, c='tab:cyan', alpha=0.4)
+    # plt.scatter(budgets, eigenvector, c='tab:olive', label='Principal Eigenvector Component', alpha=0.9)
+    # plt.plot(budgets, eigenvector, c='tab:olive', alpha=0.4)
 
-    plt.scatter(budgets, vulnerability, c='m', label='Vulnerability intervention', alpha=0.9)
-    plt.plot(budgets, vulnerability, c='m', alpha=0.4)
+    # plt.scatter(budgets, threshold, c='tab:cyan', label='Vuln-threshold degree intervention', alpha=0.9)
+    # plt.plot(budgets, threshold, c='tab:cyan', alpha=0.4)
+
+    # plt.scatter(budgets, vulnerability, c='m', label='Vulnerability intervention', alpha=0.9)
+    # plt.plot(budgets, vulnerability, c='m', alpha=0.4)
 
     plt.xlabel('Budget')
     plt.ylabel('Average vulnerability')
