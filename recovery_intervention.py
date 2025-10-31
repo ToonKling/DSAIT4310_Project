@@ -62,6 +62,7 @@ def run_intervention_experiment(budget: float, network, c: float, theta: float, 
 
     # Clustering coefficient
     clustering = list(nx.clustering(network, weight='weight').values())
+    clustering = [1 / n if n != 0 else 0 for n in clustering]
     clustering_rho = distribute_budget(budget, clustering)
     results_clustering = measure_effect_delta_base(recovery_factors=clustering_rho, model=model)
 
@@ -241,7 +242,7 @@ def plot_results_varying_budget(budgets, data: pd.DataFrame):
     plt.scatter(budgets, degree_exp_2, c='tab:purple', label='Degree intervention a = 2', alpha=0.9)
     plt.plot(budgets, degree_exp_2, c='tab:purple', alpha=0.4)
 
-    plt.scatter(budgets, clustering, c='tab:brown', label='Clustering coefficient', alpha=0.9)
+    plt.scatter(budgets, clustering, c='tab:brown', label='Inverse Clustering coefficient', alpha=0.9)
     plt.plot(budgets, clustering, c='tab:brown', alpha=0.4)
 
     plt.scatter(budgets, between, c='tab:pink', label='Betweenness Centrality', alpha=0.9)
@@ -281,7 +282,7 @@ filename = 'optimal_taus_dict.pickle'
 with open(filename, 'rb') as f:
     optimal_taus = pickle.load(f)
  
-BEST_NETWORK_NAME = 'G2'
+BEST_NETWORK_NAME = 'G1'
 BEST_NETWORK = networks_dict[BEST_NETWORK_NAME]
 BEST_C = 0.02
 BEST_THETA = 1.5
